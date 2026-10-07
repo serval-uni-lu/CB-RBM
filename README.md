@@ -25,17 +25,28 @@ Requires Python 3.9+, PyTorch, NumPy and scikit-learn.
 ## Usage
 
 ```python
-import numpy as np
 from cbrbm import CBRBMDetector
 
 det = CBRBMDetector(n_hidden=256, epochs=100)
-det.fit(x, edge_index, pool_idx)        # x: (n, d) features, edge_index: (2, E), pool_idx: nodes assumed legitimate
+det.fit(x, edge_index, pool_idx)
 
-scores = det.score_graph(x, edge_index) # s_i = -CB(x_i, c_i)
-flags = det.predict(scores)             # s_i >= threshold
+scores = det.score_graph(x, edge_index)   # s_i = -CB(x_i, c_i)
+flags = det.predict(scores)               # s_i >= threshold
+
+det.save("detector.pt")
+det = CBRBMDetector.load("detector.pt")
 
 det.refresh(x_new, edge_index_new, window_idx)   # re-estimate sign vector and threshold, weights fixed
 ```
+
+Inputs: `x` is an `(n_nodes, n_features)` array of raw features; `edge_index`
+is a `(2, n_edges)` integer array with sources in row 0 and targets in row 1,
+and a node's context averages the features of its sources, so an undirected
+graph needs both directions of every edge; `pool_idx` lists the nodes assumed
+legitimate (for example accounts with no abuse report after an aging window).
+Training uses 90% of the pool and the threshold is calibrated on the other
+10%. `examples/run_npz.py` runs this on an `.npz` file with these three
+arrays and writes the scores.
 
 `cbrbm.attacks` implements the four injected-adversary attacks of the paper
 (isolated injection, feature camouflage, Sybil, relation camouflage) and

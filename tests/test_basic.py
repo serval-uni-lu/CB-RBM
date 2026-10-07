@@ -1,4 +1,8 @@
+import os
+import tempfile
+
 import numpy as np
+import pytest
 import torch
 
 from cbrbm import ContextBoostedRBM, CBRBMDetector, mean_pool, estimate_sign_vector
@@ -29,7 +33,7 @@ def test_mean_pool_and_sign_vector():
     assert set(np.unique(s)) <= {-1.0, 1.0}
 
 
-def test_detector_calibration():
+def test_detector_calibration_and_refresh():
     x, ei = ring_graph(400, 4)
     det = CBRBMDetector(n_hidden=8, epochs=2, calib_fraction=0.25, seed=0)
     det.fit(x, ei, np.arange(400))
@@ -38,3 +42,33 @@ def test_detector_calibration():
     assert abs(fpr - 0.05) < 0.02
     det.refresh(x, ei, np.arange(400))
     assert np.isfinite(det.threshold)
+
+
+def test_same_seed_same_fit():
+    x, ei = ring_graph(300, 4)
+    a = CBRBMDetector(n_hidden=8, epochs=2, seed=3).fit(x, ei, np.arange(300))
+    b = CBRBMDetector(n_hidden=8, epochs=2, seed=3).fit(x, ei, np.arange(300))
+    assert a.threshold == b.threshold
+    np.testing.assert_allclose(a.score_graph(x, ei), b.score_graph(x, ei))
+
+
+def test_save_and_load():
+    x, ei = ring_graph(300, 4)
+    det = CBRBMDetector(n_hidden=8, epochs=2, seed=1).fit(x, ei, np.arange(300))
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "det.pt")
+        det.save(path)
+        loaded = CBRBMDetector.load(path)
+    assert loaded.threshold == det.threshold
+    np.testing.assert_allclose(loaded.score_graph(x, ei), det.score_graph(x, ei), rtol=1e-6)
+
+
+def test_input_errors():
+    x, ei = ring_graph(50, 4)
+    det = CBRBMDetector(n_hidden=8, epochs=1)
+    with pytest.raises(ValueError):
+        det.fit(x, ei, [0])
+    with pytest.raises(ValueError):
+        det.fit(x, ei, np.arange(60))
+    with pytest.raises(ValueError):
+        det.fit(x, torch.tensor([[0, 1, 2]]), np.arange(50))

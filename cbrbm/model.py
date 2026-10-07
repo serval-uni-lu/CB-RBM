@@ -58,8 +58,9 @@ class ContextBoostedRBM(nn.Module):
         """One-step contrastive divergence on (v, c) pairs.
 
         The negative phase reconstructs v from a Bernoulli hidden sample while
-        the context is held fixed; neg_std is the Gaussian reconstruction noise
-        in normalized feature space.
+        the context is held fixed; the reconstruction is treated as data (no
+        gradient flows through it). neg_std is the Gaussian reconstruction
+        noise in normalized feature space.
         """
         v = torch.as_tensor(v, dtype=torch.float32).to(self.device)
         c = torch.as_tensor(c, dtype=torch.float32).to(self.device)
@@ -76,7 +77,7 @@ class ContextBoostedRBM(nn.Module):
                 pre = v_pos @ self.W + self.b_h + self.gated_context(c_pos)
                 h = torch.bernoulli(torch.sigmoid(pre))
                 v_neg = h @ self.W.t() + self.b_v
-                v_neg = v_neg + neg_std * torch.randn_like(v_neg)
+                v_neg = (v_neg + neg_std * torch.randn_like(v_neg)).detach()
                 loss = (self.free_energy(v_pos, c_pos) - self.free_energy(v_neg, c_pos)).mean()
                 opt.zero_grad()
                 loss.backward()
